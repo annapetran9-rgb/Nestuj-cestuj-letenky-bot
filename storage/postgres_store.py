@@ -12,6 +12,7 @@ from typing import Sequence
 
 from collectors.base import FareObservation
 from config import ROOT
+from storage.base import REPEAT_INTERVAL_HOURS, skip_repeats
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +53,21 @@ class PostgresStore:
         with self.conn.cursor() as cur:
             cur.execute(schema)
 
+    def _recent_fingerprints(self) -> dict[str, datetime]:
+        """fingerprint → čas posledního uložení, za posledních N hodin."""
+        since = (
+            datetime.now(timezone.utc) - timedelta(hours=REPEAT_INTERVAL_HOURS)
+        ).isoformat()
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """SELECT fingerprint, MAX(observed_at) FROM fare_observations
+                   WHERE observed_at >= %s GROUP BY fingerprint""",
+                (since,),
+            )
+            return {r[0]: datetime.fromisoformat(r[1]) for r in cur.fetchall()}
+
     def add_observations(self, observations: Sequence[FareObservation]) -> int:
+        fresh = skip_repeats(observations, self._recent_fingerprints())
         rows = [
             (
                 o.source, o.origin, o.destination,
@@ -62,7 +77,7 @@ class PostgresStore:
                 o.airline, o.flight_number, o.transfers, o.deep_link,
                 o.fingerprint(), o.observed_at.isoformat(),
             )
-            for o in observations
+            for o in fresh
         ]
         if not rows:
             return 0
@@ -160,7 +175,7 @@ class PostgresStore:
                    ON CONFLICT (fingerprint) DO NOTHING""",
                 (
                     fingerprint, origin, destination, price_czk, score,
-                    is_error_fare, channel,
+                    1 if is_error_fare else 0, channel,
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )

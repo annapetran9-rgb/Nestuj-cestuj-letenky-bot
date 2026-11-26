@@ -70,14 +70,15 @@ def score_fare(
     # Reálná cena z pohledu člověka v ČR, včetně dopravy na letiště.
     total = price_czk + access_cost_czk(observation.origin)
     region = region_for(observation.destination)
+    rt = observation.is_round_trip
 
     # --- Pojistka první: regionální strop. Statistika sem nemá co mluvit. ---
-    if region and total > region.hard_cap_czk:
+    if region and total > region.hard_cap(rt):
         return Verdict(
             is_deal=False, is_error_fare=False, score=0.0, total_cost_czk=total,
             rejected_because=(
                 f"nad stropem pro {region.name} "
-                f"({total:.0f} > {region.hard_cap_czk:.0f} Kč)"
+                f"({total:.0f} > {region.hard_cap(rt):.0f} Kč)"
             ),
         )
 
@@ -85,11 +86,11 @@ def score_fare(
     reasons: list[str] = []
 
     # --- Signál: absolutní mimořádná cena. Funguje i bez historie. ---
-    exceptional = bool(region and total <= region.exceptional_czk)
+    exceptional = bool(region and total <= region.exceptional(rt))
     if exceptional:
         score += 2.0
         reasons.append(
-            f"mimořádná cena pro {region.name} (pod {region.exceptional_czk:.0f} Kč)"
+            f"mimořádná cena pro {region.name} (pod {region.exceptional(rt):.0f} Kč)"
         )
 
     # --- Signál: Kč/km u dálkových letů ---

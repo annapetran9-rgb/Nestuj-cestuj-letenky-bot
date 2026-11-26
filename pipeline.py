@@ -16,9 +16,9 @@ import argparse
 import logging
 import sys
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
-from analysis.airports import DEFAULT_ORIGINS
+from analysis.airports import DEFAULT_ORIGINS, LONG_HAUL_ORIGINS, LONG_HAUL_TARGETS
 from analysis.baseline import compute_baseline
 from analysis.scoring import score_fare
 from collectors import fx, ryanair, travelpayouts
@@ -35,6 +35,8 @@ log = logging.getLogger("pipeline")
 SEARCH_WINDOW_DAYS = 180
 #: Nejbližší odlet, který má smysl posílat (pod tím se to nedá zorganizovat).
 MIN_DAYS_AHEAD = 7
+#: Kolik nejlevnějších termínů si brát z jednoho cíleného dotazu na dálkovou trasu.
+LONG_HAUL_RESULTS_PER_ROUTE = 30
 
 
 def _add_czk(observations: list[FareObservation]) -> list[FareObservation]:
@@ -47,9 +49,56 @@ def _add_czk(observations: list[FareObservation]) -> list[FareObservation]:
     return result
 
 
-def collect(settings: Settings, origins: list[str], dry_run: bool) -> int:
-    """Projde zdroje a uloží pozorování."""
+def month_windows(date_from: date, date_to: date) -> list[tuple[date, date]]:
+    """Rozdělí období na kalendářní měsíce.
+
+    Ryanair v režimu „kamkoliv" vrací jen jednu (nejlevnější) cenu na
+    destinaci za celé zadané období. Kdybychom se ptali na 180 dní najednou,
+    dostali bychom pro většinu měsíců žádná data — a baseline se počítá
+    právě po měsících. Proto se ptáme měsíc po měsíci.
+    """
+    windows: list[tuple[date, date]] = []
+    start = date_from
+    while start <= date_to:
+        next_month = (start.replace(day=1) + timedelta(days=32)).replace(day=1)
+        end = min(next_month - timedelta(days=1), date_to)
+        windows.append((start, end))
+        start = next_month
+    return windows
+
+
+def long_haul_origin_now(now: datetime | None = None) -> str:
+    """Které letiště se tuto hodinu prohledává na dálkové lety.
+
+    78 cílů × 7 letišť by bylo přes 500 dotazů za hodinu — to by Travelpayouts
+    nejspíš zablokoval. Letiště se proto střídají po hodinách: každé přijde na
+    řadu zhruba 3× denně, což stačí, protože data Travelpayouts jsou z cache
+    a mění se v řádu hodin až dní.
+    """
+    moment = now or datetime.now(timezone.utc)
+    hours_since_epoch = int(moment.timestamp() // 3600)
+    return LONG_HAUL_ORIGINS[hours_since_epoch % len(LONG_HAUL_ORIGINS)]
+
+
+def collect(
+    settings: Settings, origins: list[str], dry_run: bool,
+    long_haul: str = "rotate",
+) -> int:
+    """Projde zdroje a uloží pozorování.
+
+    `long_haul`: "rotate" = dálkové lety z jednoho letiště (střídá se po
+    hodinách), "all" = ze všech zadaných letišť v LONG_HAUL_ORIGINS
+    (pro ruční testy), "none" = vůbec.
+    """
     today = date.today()
+    if long_haul == "rotate":
+        long_haul_origins = {long_haul_origin_now()}
+    elif long_haul == "all":
+        long_haul_origins = set(LONG_HAUL_ORIGINS)
+    else:
+        long_haul_origins = set()
+    log.info("dálkové lety tento běh z: %s",
+             ", ".join(sorted(long_haul_origins)) or "nikde")
     date_from = today + timedelta(days=MIN_DAYS_AHEAD)
     date_to = today + timedelta(days=SEARCH_WINDOW_DAYS)
 
@@ -57,12 +106,14 @@ def collect(settings: Settings, origins: list[str], dry_run: bool) -> int:
 
     for origin in origins:
         # Ryanair, režim „kamkoliv" — tady se objevují nabídky,
-        # o kterých člověk nevěděl, že existují.
-        collected.extend(
-            ryanair.fetch_one_way_fares(
-                origin=origin, date_from=date_from, date_to=date_to, currency="EUR",
+        # o kterých člověk nevěděl, že existují. Po měsících, viz month_windows.
+        for window_from, window_to in month_windows(date_from, date_to):
+            collected.extend(
+                ryanair.fetch_one_way_fares(
+                    origin=origin, date_from=window_from, date_to=window_to,
+                    currency="EUR",
+                )
             )
-        )
 
         # Travelpayouts: co uživatelé Aviasales reálně našli za levné
         if settings.travelpayouts_token:
@@ -73,6 +124,19 @@ def collect(settings: Settings, origins: list[str], dry_run: bool) -> int:
                     marker=settings.travelpayouts_marker,
                 )
             )
+
+        # Travelpayouts cíleně: dálkové trasy, které plošný dotaz nikdy nevrátí.
+        if settings.travelpayouts_token and origin in long_haul_origins:
+            for destination in LONG_HAUL_TARGETS:
+                collected.extend(
+                    travelpayouts.fetch_prices_for_dates(
+                        token=settings.travelpayouts_token,
+                        origin=origin,
+                        destination=destination,
+                        limit=LONG_HAUL_RESULTS_PER_ROUTE,
+                        marker=settings.travelpayouts_marker,
+                    )
+                )
 
     collected = _add_czk(dedupe(collected))
     log.info("celkem %d unikátních pozorování", len(collected))
@@ -233,6 +297,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_collect.add_argument("--dry-run", action="store_true",
                            help="jen vypsat, neukládat")
+    p_collect.add_argument(
+        "--long-haul", choices=("rotate", "all", "none"), default="rotate",
+        help="dálkové lety: rotate = jedno letiště za hodinu (výchozí), "
+             "all = ze všech velkých letišť, none = vůbec",
+    )
 
     p_analyze = sub.add_parser("analyze", help="vyhodnotit a případně poslat")
     p_analyze.add_argument("--notify", action="store_true",
@@ -253,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "collect":
         origins = [o.strip().upper() for o in args.origins.split(",") if o.strip()]
-        collect(settings, origins, dry_run=args.dry_run)
+        collect(settings, origins, dry_run=args.dry_run, long_haul=args.long_haul)
     elif args.command == "analyze":
         analyze(settings, notify=args.notify, hours=args.hours)
     elif args.command == "stats":

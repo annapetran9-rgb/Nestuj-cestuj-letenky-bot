@@ -58,7 +58,10 @@ def parse_prices(payload: dict[str, Any], marker: str = "") -> list[FareObservat
         destination = (
             item.get("destination_airport") or item.get("destination") or ""
         ).upper()
-        depart = _parse_dt(item.get("departure_at"))
+        # `/prices_for_dates` posílá `departure_at`, `/get_latest_prices` posílá
+        # `depart_date` (ověřeno proti živému API), proto obojí.
+        depart = _parse_dt(item.get("departure_at") or item.get("depart_date"))
+        return_date = _parse_dt(item.get("return_at") or item.get("return_date"))
         price = item.get("price") or item.get("value")
 
         if not (origin and destination and depart and price):
@@ -77,7 +80,7 @@ def parse_prices(payload: dict[str, Any], marker: str = "") -> list[FareObservat
                     origin=origin,
                     destination=destination,
                     depart_date=depart,
-                    return_date=_parse_dt(item.get("return_at")),
+                    return_date=return_date,
                     price=float(price),
                     currency=currency,
                     airline=item.get("airline"),
@@ -85,7 +88,9 @@ def parse_prices(payload: dict[str, Any], marker: str = "") -> list[FareObservat
                         f"{item.get('airline') or ''}{item.get('flight_number') or ''}"
                         or None
                     ),
-                    transfers=int(item.get("transfers") or 0),
+                    transfers=int(
+                        item.get("transfers") or item.get("number_of_changes") or 0
+                    ),
                     deep_link=deep_link,
                 )
             )

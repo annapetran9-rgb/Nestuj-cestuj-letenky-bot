@@ -30,19 +30,31 @@ class Airport:
 class Region:
     key: str
     name: str
-    hard_cap_czk: float        # nad tuto cenu se alert neposílá nikdy
-    exceptional_czk: float     # pod tuto cenu je to akce i bez historie
+    hard_cap_czk: float        # zpáteční: nad tuto cenu se alert neposílá nikdy
+    exceptional_czk: float     # zpáteční: pod tuto cenu je to akce i bez historie
+    hard_cap_oneway_czk: float     # totéž pro jednosměrnou letenku
+    exceptional_oneway_czk: float
+
+    def hard_cap(self, round_trip: bool) -> float:
+        return self.hard_cap_czk if round_trip else self.hard_cap_oneway_czk
+
+    def exceptional(self, round_trip: bool) -> float:
+        return self.exceptional_czk if round_trip else self.exceptional_oneway_czk
 
 
+#: Jednosměrné prahy nejsou prostá polovina zpátečních. Hlavně v Evropě:
+#: Ryanair běžně prodává jednosměrky za 400–800 Kč, takže práh 1 200 Kč by
+#: označil za „mimořádnou" skoro každou letenku a signál by nic neříkal.
 REGIONS: dict[str, Region] = {
-    "evropa":          Region("evropa", "Evropa", 4500, 1200),
-    "blizky-vychod":   Region("blizky-vychod", "Blízký východ", 8000, 4500),
-    "afrika":          Region("afrika", "Afrika", 10000, 5500),
-    "asie":            Region("asie", "Asie", 14000, 8500),
-    "severni-amerika": Region("severni-amerika", "Severní Amerika", 12000, 6500),
-    "stredni-amerika": Region("stredni-amerika", "Střední Amerika", 15000, 9000),
-    "jizni-amerika":   Region("jizni-amerika", "Jižní Amerika", 16000, 10000),
-    "oceanie":         Region("oceanie", "Oceánie", 20000, 13000),
+    #                    klíč               název              zpáteční     jednosměrná
+    "evropa":          Region("evropa", "Evropa",                4500, 1200,   2500, 450),
+    "blizky-vychod":   Region("blizky-vychod", "Blízký východ",  8000, 4500,   5000, 2500),
+    "afrika":          Region("afrika", "Afrika",               10000, 5500,   6000, 3000),
+    "asie":            Region("asie", "Asie",                   14000, 8500,   8500, 4500),
+    "severni-amerika": Region("severni-amerika", "Severní Amerika", 12000, 6500, 7500, 3500),
+    "stredni-amerika": Region("stredni-amerika", "Střední Amerika", 15000, 9000, 9000, 5000),
+    "jizni-amerika":   Region("jizni-amerika", "Jižní Amerika", 16000, 10000, 10000, 5500),
+    "oceanie":         Region("oceanie", "Oceánie",             20000, 13000, 12000, 7000),
 }
 
 #: Odletová letiště dostupná z ČR a odhad nákladu na dopravu tam a zpět (CZK).
@@ -55,8 +67,41 @@ ORIGIN_ACCESS_COST_CZK: dict[str, float] = {
     "DRS": 600, "BER": 700, "LEJ": 700, "NUE": 900, "MUC": 1000,
 }
 
-#: Výchozí cluster pro skenování. Prvních pět pokryje většinu nabídek.
-DEFAULT_ORIGINS: tuple[str, ...] = ("PRG", "BRQ", "OSR", "VIE", "KRK", "BER", "BTS")
+#: Výchozí cluster pro plošné skenování (Ryanair „kamkoliv" + Travelpayouts
+#: „co je teď levné"). Všechna letiště, pro která známe cenu dopravy z ČR.
+DEFAULT_ORIGINS: tuple[str, ...] = tuple(ORIGIN_ACCESS_COST_CZK)
+
+#: Odkud se cíleně hledají dálkové lety. Plošný dotaz „co je levné z PRG"
+#: vrací jen nejlevnější letenky, a to jsou vždy krátké lety po Evropě —
+#: dálkové trasy se do něj nikdy nedostanou. Proto se na ně ptáme jmenovitě.
+#: Velká letiště s dálkovými spoji v dosahu ČR. Každou hodinu se prohledá
+#: jen jedno z nich (střídají se), viz `pipeline.long_haul_origin_now`.
+LONG_HAUL_ORIGINS: tuple[str, ...] = ("PRG", "VIE", "BER", "MUC", "BUD", "WAW", "KRK")
+
+#: Dálkové cíle, na které se robot ptá jmenovitě. Každý cíl = 1 dotaz na
+#: odletové letiště a hodinu, takže seznam drž rozumně dlouhý (do ~50).
+#: Každé letiště tady musí být i v AIRPORTS, jinak pro něj neplatí stropy.
+LONG_HAUL_TARGETS: tuple[str, ...] = (
+    # Asie — jihovýchodní
+    "BKK", "HKT", "SGN", "HAN", "SIN", "KUL", "MNL", "CEB", "DPS", "CGK",
+    # Asie — východní a jižní
+    "NRT", "HND", "KIX", "ICN", "PEK", "PVG", "HKG", "TPE",
+    "DEL", "BOM", "CMB", "MLE", "KTM",
+    # Blízký východ (levné lety k moři chytí plošný dotaz, tady přestupní uzly)
+    "DXB", "DOH", "TLV", "AMM", "MCT",
+    # Afrika
+    "CAI", "ADD", "NBO", "ZNZ", "DAR", "JNB", "CPT", "WDH",
+    "MRU", "SEZ", "TNR", "ACC", "DSS",
+    # Severní Amerika
+    "JFK", "EWR", "BOS", "IAD", "ORD", "MIA", "MCO", "DEN",
+    "LAX", "SFO", "LAS", "SEA", "YYZ", "YUL", "YVR",
+    # Střední Amerika a Karibik
+    "MEX", "CUN", "PUJ", "HAV", "SJO", "PTY", "MBJ",
+    # Jižní Amerika
+    "GRU", "GIG", "EZE", "SCL", "BOG", "LIM", "UIO",
+    # Oceánie
+    "SYD", "MEL", "BNE", "PER", "AKL", "NAN", "PPT", "HNL",
+)
 
 
 def _a(iata, name, country, region, lat, lon) -> tuple[str, Airport]:
@@ -108,6 +153,7 @@ AIRPORTS: dict[str, Airport] = dict([
     _a("DOH", "Dauhá", "Katar", "blizky-vychod", 25.27, 51.61),
     _a("TLV", "Tel Aviv", "Izrael", "blizky-vychod", 32.01, 34.89),
     _a("AMM", "Ammán", "Jordánsko", "blizky-vychod", 31.72, 35.99),
+    _a("MCT", "Maskat", "Omán", "blizky-vychod", 23.59, 58.28),
     # --- Afrika ---
     _a("CAI", "Káhira", "Egypt", "afrika", 30.11, 31.41),
     _a("HRG", "Hurghada", "Egypt", "afrika", 27.18, 33.80),
@@ -118,6 +164,13 @@ AIRPORTS: dict[str, Airport] = dict([
     _a("NBO", "Nairobi", "Kenya", "afrika", -1.32, 36.93),
     _a("ZNZ", "Zanzibar", "Tanzanie", "afrika", -6.22, 39.22),
     _a("MRU", "Mauricius", "Mauricius", "afrika", -20.43, 57.68),
+    _a("ADD", "Addis Abeba", "Etiopie", "afrika", 8.98, 38.80),
+    _a("DAR", "Dar es Salaam", "Tanzanie", "afrika", -6.88, 39.20),
+    _a("SEZ", "Seychely", "Seychely", "afrika", -4.67, 55.52),
+    _a("WDH", "Windhoek", "Namibie", "afrika", -22.48, 17.47),
+    _a("ACC", "Akkra", "Ghana", "afrika", 5.61, -0.17),
+    _a("DSS", "Dakar", "Senegal", "afrika", 14.67, -17.07),
+    _a("TNR", "Antananarivo", "Madagaskar", "afrika", -18.80, 47.48),
     # --- Asie ---
     _a("BKK", "Bangkok Suvarnabhumi", "Thajsko", "asie", 13.69, 100.75),
     _a("DMK", "Bangkok Don Mueang", "Thajsko", "asie", 13.91, 100.61),
@@ -153,6 +206,12 @@ AIRPORTS: dict[str, Airport] = dict([
     _a("MIA", "Miami", "USA", "severni-amerika", 25.80, -80.29),
     _a("YYZ", "Toronto", "Kanada", "severni-amerika", 43.68, -79.63),
     _a("YVR", "Vancouver", "Kanada", "severni-amerika", 49.19, -123.18),
+    _a("SEA", "Seattle", "USA", "severni-amerika", 47.45, -122.31),
+    _a("IAD", "Washington", "USA", "severni-amerika", 38.95, -77.46),
+    _a("LAS", "Las Vegas", "USA", "severni-amerika", 36.08, -115.15),
+    _a("MCO", "Orlando", "USA", "severni-amerika", 28.43, -81.31),
+    _a("DEN", "Denver", "USA", "severni-amerika", 39.86, -104.67),
+    _a("YUL", "Montreal", "Kanada", "severni-amerika", 45.47, -73.74),
     # --- Střední Amerika a Karibik ---
     _a("MEX", "Mexico City", "Mexiko", "stredni-amerika", 19.44, -99.07),
     _a("CUN", "Cancún", "Mexiko", "stredni-amerika", 21.04, -86.87),
@@ -160,6 +219,7 @@ AIRPORTS: dict[str, Airport] = dict([
     _a("HAV", "Havana", "Kuba", "stredni-amerika", 23.00, -82.41),
     _a("SJO", "San José", "Kostarika", "stredni-amerika", 9.99, -84.21),
     _a("PTY", "Panama", "Panama", "stredni-amerika", 9.07, -79.38),
+    _a("MBJ", "Montego Bay", "Jamajka", "stredni-amerika", 18.50, -77.91),
     # --- Jižní Amerika ---
     _a("GRU", "São Paulo", "Brazílie", "jizni-amerika", -23.43, -46.47),
     _a("EZE", "Buenos Aires", "Argentina", "jizni-amerika", -34.82, -58.54),
@@ -167,11 +227,16 @@ AIRPORTS: dict[str, Airport] = dict([
     _a("BOG", "Bogotá", "Kolumbie", "jizni-amerika", 4.70, -74.15),
     _a("LIM", "Lima", "Peru", "jizni-amerika", -12.02, -77.11),
     _a("UIO", "Quito", "Ekvádor", "jizni-amerika", -0.13, -78.36),
+    _a("GIG", "Rio de Janeiro", "Brazílie", "jizni-amerika", -22.81, -43.25),
     # --- Oceánie ---
     _a("SYD", "Sydney", "Austrálie", "oceanie", -33.95, 151.18),
     _a("MEL", "Melbourne", "Austrálie", "oceanie", -37.67, 144.84),
     _a("AKL", "Auckland", "Nový Zéland", "oceanie", -37.01, 174.79),
     _a("HNL", "Honolulu", "USA", "oceanie", 21.32, -157.92),
+    _a("BNE", "Brisbane", "Austrálie", "oceanie", -27.38, 153.12),
+    _a("PER", "Perth", "Austrálie", "oceanie", -31.94, 115.97),
+    _a("NAN", "Fidži Nadi", "Fidži", "oceanie", -17.76, 177.44),
+    _a("PPT", "Tahiti", "Francouzská Polynésie", "oceanie", -17.55, -149.61),
 ])
 
 

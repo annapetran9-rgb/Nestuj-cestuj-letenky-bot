@@ -89,3 +89,27 @@ def test_historie_umi_vynechat_nejnovejsi_okno(store):
 
     assert sorted(vcetne) == [4200.0, 14000.0, 15000.0]
     assert sorted(bez) == [14000.0, 15000.0]
+
+
+def test_stejna_nabidka_se_neulozi_kazdou_hodinu(store):
+    """Sběr běží každou hodinu. Nezměněná cena se má uložit jen jednou denně,
+    jinak by limit historie „splnila" jediná opakovaná letenka."""
+    assert store.add_observations([fare(11980)]) == 1
+    assert store.add_observations([fare(11980)]) == 0
+    assert store.observation_count() == 1
+
+
+def test_zmena_ceny_se_ulozi_hned(store):
+    store.add_observations([fare(11980)])
+    assert store.add_observations([fare(10990)]) == 1
+
+
+def test_stejna_cena_v_ruznych_dnech_jsou_dve_pozorovani(store):
+    pred_tydnem = datetime.now(timezone.utc) - timedelta(days=7)
+    assert store.add_observations([fare(11980, observed_at=pred_tydnem)]) == 1
+    assert store.add_observations([fare(11980)]) == 1
+    assert store.observation_count() == 2
+
+
+def test_opakovani_v_jedne_davce_se_vyradi(store):
+    assert store.add_observations([fare(11980), fare(11980)]) == 1

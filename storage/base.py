@@ -5,10 +5,18 @@ jen otázkou `DATABASE_URL`, bez zásahu do logiky.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Protocol, Sequence, runtime_checkable
 
 from collectors.base import FareObservation
+
+
+#: Stejná nabídka (stejný fingerprint = stejná trasa, termín i cena) se uloží
+#: nejvýš jednou za tolik hodin. Sběr běží každou hodinu a bez tohohle by se
+#: nezměněná cena uložila 24× denně: databáze by rostla 24× rychleji, než je
+#: potřeba, a limit `MIN_HISTORY_OBSERVATIONS` by se „splnil" za den jedinou
+#: opakovanou letenkou. Změna ceny se uloží vždy (jiný fingerprint).
+REPEAT_INTERVAL_HOURS = 24
 
 
 @runtime_checkable
@@ -18,7 +26,11 @@ class Store(Protocol):
     def init_schema(self) -> None: ...
 
     def add_observations(self, observations: Sequence[FareObservation]) -> int:
-        """Uloží pozorování. Vrací počet skutečně vložených řádků."""
+        """Uloží pozorování. Vrací počet skutečně vložených řádků.
+
+        Přeskočí nabídky, jejichž fingerprint už je uložený z posledních
+        `REPEAT_INTERVAL_HOURS` hodin.
+        """
         ...
 
     def route_prices(
@@ -87,6 +99,30 @@ def open_store(database_url: str = "", sqlite_path: str = "flight_deals.db") -> 
         store = SQLiteStore(sqlite_path)
     store.init_schema()
     return store
+
+
+def skip_repeats(
+    observations: Sequence[FareObservation],
+    last_stored: dict[str, datetime],
+) -> list[FareObservation]:
+    """Vyřadí nabídky uložené před méně než `REPEAT_INTERVAL_HOURS` hodinami.
+
+    Rozhoduje čas pozorování, ne čas zápisu — stejná cena pozorovaná před
+    týdnem a dnes jsou dvě platná pozorování. `last_stored` je fingerprint →
+    poslední uložené `observed_at` (z databáze); funkce ho průběžně doplňuje,
+    takže hlídá i opakování uvnitř jedné dávky.
+    """
+    interval = timedelta(hours=REPEAT_INTERVAL_HOURS)
+    last = dict(last_stored)
+    fresh: list[FareObservation] = []
+    for obs in sorted(observations, key=lambda o: o.observed_at):
+        fp = obs.fingerprint()
+        previous = last.get(fp)
+        if previous is not None and abs(obs.observed_at - previous) < interval:
+            continue
+        last[fp] = obs.observed_at
+        fresh.append(obs)
+    return fresh
 
 
 def month_key(day: date) -> str:

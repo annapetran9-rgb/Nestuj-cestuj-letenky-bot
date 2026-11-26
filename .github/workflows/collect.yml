@@ -24,7 +24,7 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +40,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
           TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
-        run: python3 pipeline.py collect --origins PRG,BRQ,OSR,VIE,KRK,BER,BTS
+        run: python3 pipeline.py collect
 
       - name: Kolik už máme nasbírané
         env:

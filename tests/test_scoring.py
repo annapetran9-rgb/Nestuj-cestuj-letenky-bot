@@ -128,3 +128,22 @@ def test_dva_signaly_uz_staci():
     )
     assert verdict.is_deal is True
     assert len(verdict.reasons) >= 2
+
+
+def test_bezna_evropska_jednosmerka_neni_mimoradna():
+    """Ryanair prodává jednosměrky za 400–800 Kč běžně. Práh pro zpáteční
+    letenky (1 200 Kč) by z nich udělal „mimořádné" skoro všechny."""
+    verdict = score_fare(fare(700, destination="BGY", round_trip=False), None)
+    assert not any("mimořádná" in r for r in verdict.reasons)
+
+
+def test_extremne_levna_jednosmerka_je_mimoradna():
+    verdict = score_fare(fare(400, destination="BGY", round_trip=False), None)
+    assert any("mimořádná" in r for r in verdict.reasons)
+
+
+def test_jednosmerka_ma_vlastni_strop():
+    """Jednosměrka do Asie za 12 000 Kč je pod zpátečním stropem, ale akce to není."""
+    verdict = score_fare(fare(12000, round_trip=False), compute_baseline(ASIA_HISTORY))
+    assert verdict.is_deal is False
+    assert "nad stropem" in verdict.rejected_because

@@ -8,6 +8,7 @@ from typing import Sequence
 
 from collectors.base import FareObservation
 from config import ROOT
+from storage.base import REPEAT_INTERVAL_HOURS, skip_repeats
 
 
 class SQLiteStore:
@@ -23,7 +24,20 @@ class SQLiteStore:
         self.conn.executescript(schema)
         self.conn.commit()
 
+    def _recent_fingerprints(self) -> dict[str, datetime]:
+        """fingerprint → čas posledního uložení, za posledních N hodin."""
+        since = (
+            datetime.now(timezone.utc) - timedelta(hours=REPEAT_INTERVAL_HOURS)
+        ).isoformat()
+        cursor = self.conn.execute(
+            """SELECT fingerprint, MAX(observed_at) FROM fare_observations
+               WHERE observed_at >= ? GROUP BY fingerprint""",
+            (since,),
+        )
+        return {row[0]: datetime.fromisoformat(row[1]) for row in cursor.fetchall()}
+
     def add_observations(self, observations: Sequence[FareObservation]) -> int:
+        fresh = skip_repeats(observations, self._recent_fingerprints())
         rows = [
             (
                 o.source, o.origin, o.destination,
@@ -33,7 +47,7 @@ class SQLiteStore:
                 o.airline, o.flight_number, o.transfers, o.deep_link,
                 o.fingerprint(), o.observed_at.isoformat(),
             )
-            for o in observations
+            for o in fresh
         ]
         if not rows:
             return 0

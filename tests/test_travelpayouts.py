@@ -41,3 +41,21 @@ def test_chybova_odpoved():
 
 def test_prazdna_data():
     assert parse_prices({"success": True, "data": []}) == []
+
+
+def test_parsuje_format_get_latest_prices():
+    """`/get_latest_prices` má podle dokumentace jiné názvy polí.
+
+    Ručně sestavený vzorek — až bude token, nahraď ho reálnou odpovědí.
+    """
+    payload = {"success": True, "currency": "czk", "data": [{
+        "origin": "PRG", "destination": "BKK",
+        "depart_date": "2027-05-02", "return_date": "2027-05-23",
+        "value": 9450, "number_of_changes": 1,
+    }]}
+    observations = parse_prices(payload)
+    assert len(observations) == 1
+    assert observations[0].depart_date == date(2027, 5, 2)
+    assert observations[0].return_date == date(2027, 5, 23)
+    assert observations[0].price == 9450.0
+    assert observations[0].transfers == 1

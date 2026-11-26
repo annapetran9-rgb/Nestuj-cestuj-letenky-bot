@@ -97,3 +97,8 @@ Když dokončíš milník, zaškrtni ho tady.
   z vlastního Stay22 účtu.
 - `worker/` — stub pro 7. milník, Brevo endpoint ověřit v dokumentaci.
 - `analysis/distance.py` — souřadnice jen pro vybraná letiště, rozšiřuj podle potřeby.
+- `tests/fixtures/` — obě fixtures jsou ručně sestavené, ne reálné odpovědi API.
+  Až to půjde, nahraď je skutečnou odpovědí Ryanairu a Travelpayouts.
+- `collectors/travelpayouts.py` — `/get_latest_prices` vrací jiné názvy polí
+  než `/prices_for_dates` (`depart_date`, `value`, `number_of_changes`),
+  ověřeno proti živému API 26. 11. 2026. Reálná fixture zatím chybí.
