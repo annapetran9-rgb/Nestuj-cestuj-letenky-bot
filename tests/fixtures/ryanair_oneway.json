@@ -1,0 +1,76 @@
+{
+  "arrivalAirportCategories": null,
+  "fares": [
+    {
+      "outbound": {
+        "departureAirport": {
+          "countryName": "Czech Republic", "iataCode": "PRG",
+          "name": "Prague", "seoName": "prague",
+          "city": {"code": "PRAGUE", "countryCode": "cz", "name": "Prague"}
+        },
+        "arrivalAirport": {
+          "countryName": "Italy", "iataCode": "BGY",
+          "name": "Milán Bergamo", "seoName": "milan-bergamo",
+          "city": {"code": "BERGAMO", "countryCode": "it", "name": "Bergamo"}
+        },
+        "departureDate": "2027-01-21T17:05:00",
+        "arrivalDate": "2027-01-21T18:30:00",
+        "price": {
+          "value": 16.99, "valueMainUnit": "16", "valueFractionalUnit": "99",
+          "currencyCode": "EUR", "currencySymbol": "€"
+        },
+        "flightKey": "FR~3527~ ~~PRG~01/21/2027 17:05~BGY~01/21/2027 18:30~~",
+        "flightNumber": "FR3527",
+        "previousPrice": null,
+        "priceUpdated": 1795675838000
+      },
+      "summary": {
+        "price": {
+          "value": 16.99, "valueMainUnit": "16", "valueFractionalUnit": "99",
+          "currencyCode": "EUR", "currencySymbol": "€"
+        },
+        "previousPrice": null, "newRoute": false
+      }
+    },
+    {
+      "outbound": {
+        "departureAirport": {
+          "countryName": "Czech Republic", "iataCode": "PRG",
+          "name": "Prague", "seoName": "prague",
+          "city": {"code": "PRAGUE", "countryCode": "cz", "name": "Prague"}
+        },
+        "arrivalAirport": {
+          "countryName": "Spain", "iataCode": "AGP",
+          "name": "Malaga", "seoName": "malaga",
+          "city": {"code": "MALAGA", "countryCode": "es", "name": "Malaga"}
+        },
+        "departureDate": "2027-02-11T06:20:00",
+        "arrivalDate": "2027-02-11T09:55:00",
+        "price": {
+          "value": 24.99, "valueMainUnit": "24", "valueFractionalUnit": "99",
+          "currencyCode": "EUR", "currencySymbol": "€"
+        },
+        "flightKey": "FR~8142~ ~~PRG~02/11/2027 06:20~AGP~02/11/2027 09:55~~",
+        "flightNumber": "FR8142",
+        "previousPrice": 39.99,
+        "priceUpdated": 1795675838000
+      },
+      "summary": {
+        "price": {"value": 24.99, "currencyCode": "EUR", "currencySymbol": "€"},
+        "previousPrice": 39.99, "newRoute": false
+      }
+    },
+    {
+      "outbound": {
+        "departureAirport": {"countryName": "Czech Republic", "iataCode": "PRG", "name": "Prague", "city": {"name": "Prague"}},
+        "arrivalAirport": {"countryName": "Nowhere", "iataCode": "XX", "name": "Rozbité letiště", "city": {"name": "?"}},
+        "departureDate": "2027-02-11T06:20:00",
+        "price": {"value": 9.99, "currencyCode": "EUR"},
+        "flightNumber": "FR0000"
+      },
+      "summary": {"price": {"value": 9.99, "currencyCode": "EUR"}}
+    }
+  ],
+  "nextPage": null,
+  "size": 3
+}

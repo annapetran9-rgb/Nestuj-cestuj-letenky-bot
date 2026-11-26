@@ -1,0 +1,6 @@
+# Runtime běží na standardní knihovně — pro lokální běh se SQLite
+# není potřeba instalovat nic.
+#
+# Volitelné, až budeš potřebovat:
+psycopg[binary]>=3.1   ; python_version >= "3.11"   # Postgres (Neon/Supabase)
+pytest>=8.0                                          # testy

@@ -1,0 +1,24 @@
+# Data — NIKDY do repa. Repo může být veřejné, data odběratelů ne.
+*.db
+*.sqlite
+*.sqlite3
+data/fx_cache.json
+data/*.local.*
+
+# Tajné údaje
+.env
+.env.local
+worker/wrangler.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# OS / editory
+.DS_Store
+.idea/
+.vscode/

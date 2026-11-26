@@ -1,0 +1,40 @@
+{
+  "success": true,
+  "currency": "czk",
+  "data": [
+    {
+      "origin": "PRG", "destination": "MNL",
+      "origin_airport": "PRG", "destination_airport": "MNL",
+      "price": 11980, "airline": "TK", "flight_number": 1770,
+      "departure_at": "2027-03-14T10:25:00+01:00",
+      "return_at": "2027-03-28T23:55:00+08:00",
+      "transfers": 1, "return_transfers": 1,
+      "duration": 1890, "duration_to": 1140, "duration_back": 750,
+      "link": "/search/PRG1403MNL28031?t=ABC123"
+    },
+    {
+      "origin": "PRG", "destination": "BKK",
+      "origin_airport": "PRG", "destination_airport": "BKK",
+      "price": 9450, "airline": "QR", "flight_number": 196,
+      "departure_at": "2027-05-02T15:40:00+02:00",
+      "return_at": "2027-05-23T01:20:00+07:00",
+      "transfers": 1, "return_transfers": 1,
+      "duration": 1620,
+      "link": "/search/PRG0205BKK23051?t=DEF456"
+    },
+    {
+      "origin": "VIE", "destination": "SIN",
+      "origin_airport": "VIE", "destination_airport": "SIN",
+      "price": 13200, "airline": "EK", "flight_number": 128,
+      "departure_at": "2027-04-10T22:05:00+02:00",
+      "return_at": "2027-04-24T01:15:00+08:00",
+      "transfers": 1, "return_transfers": 1,
+      "link": "/search/VIE1004SIN24041?t=GHI789"
+    },
+    {
+      "origin": "PRG", "destination": "PRG",
+      "price": 100, "departure_at": "2027-04-10T22:05:00+02:00",
+      "link": "/search/broken"
+    }
+  ]
+}

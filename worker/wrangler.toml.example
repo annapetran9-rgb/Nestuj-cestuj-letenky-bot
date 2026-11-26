@@ -1,0 +1,13 @@
+# Zkopíruj jako wrangler.toml a doplň. Soubor wrangler.toml je v .gitignore,
+# protože obsahuje ID tvého účtu.
+
+name = "nestuj-cestuj-odber"
+main = "index.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+BREVO_LIST_ID = ""      # ID seznamu v Brevo
+BREVO_TEMPLATE_ID = ""  # ID potvrzovací šablony
+
+# BREVO_API_KEY se nastavuje jako secret, ne tady:
+#   npx wrangler secret put BREVO_API_KEY

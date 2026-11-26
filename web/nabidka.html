@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nabídka letenky — Nestůj, cestuj!</title>
+<!-- Univerzální stránka nabídky.
+     Jedna stránka obslouží celý svět, dokud nevznikne sekce Destinace.
+     Díky tomu funguje monetizace od první odeslané nabídky.
+
+     Čte parametry z URL:
+       ?misto=Manila&iata=MNL&zeme=Filipíny&odlet=PRG
+       &od=2027-03-14&do=2027-03-28&cena=11980
+
+     Robot tyhle odkazy generuje v notify/links.py.
+
+     NEINDEXOVAT — je to parametrická stránka, v indexu nemá co dělat.
+     Sekce Destinace je to, co má rankovat. -->
+<meta name="robots" content="noindex, follow">
+<style>
+  :root { --text:#1d1d1f; --muted:#6b6b70; --line:#e6e6e8; --accent:#0b7285; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;
+         color:var(--text); background:#fff; }
+  .wrap { max-width:720px; margin:0 auto; padding:24px 20px 64px; }
+  h1 { font-size:1.75rem; line-height:1.25; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 24px; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:20px;
+          margin:0 0 24px; }
+  .price { font-size:2rem; font-weight:650; margin:0 0 2px; }
+  .price small { font-size:.9rem; font-weight:400; color:var(--muted); }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:4px 16px; margin:16px 0 0; }
+  dt { color:var(--muted); }
+  dd { margin:0; }
+  .btn { display:inline-block; background:var(--accent); color:#fff;
+         text-decoration:none; padding:12px 22px; border-radius:8px;
+         font-weight:550; margin:20px 0 0; }
+  .btn:hover { opacity:.9; }
+  h2 { font-size:1.2rem; margin:32px 0 8px; }
+  .note { font-size:.875rem; color:var(--muted); border-left:3px solid var(--line);
+          padding-left:14px; }
+  #stay22 { min-height:460px; border:1px solid var(--line); border-radius:12px;
+            overflow:hidden; margin:12px 0 0; }
+  #stay22 iframe { width:100%; height:460px; border:0; display:block; }
+  footer { margin-top:48px; padding-top:20px; border-top:1px solid var(--line);
+           font-size:.875rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 id="title">Nabídka letenky</h1>
+  <p class="sub" id="subtitle"></p>
+
+  <div class="card">
+    <p class="price"><span id="price">—</span> <small>za osobu</small></p>
+    <dl>
+      <dt>Odlet</dt><dd id="route">—</dd>
+      <dt>Termín</dt><dd id="dates">—</dd>
+    </dl>
+    <a class="btn" id="flight-link" href="#" rel="nofollow sponsored"
+       target="_blank">Zobrazit letenku</a>
+    <p class="note" style="margin-top:18px">
+      Cenu jsem našel automaticky a mění se po hodinách. Než si začneš plánovat
+      dovolenou, ověř si ji přímo u prodejce. U mimořádně nízkých cen se stává,
+      že je aerolinka zruší — nekupuj proto nic nevratného dřív, než máš letenku
+      potvrzenou.
+    </p>
+  </div>
+
+  <h2 id="stay-heading">Kde spát</h2>
+  <p class="sub">Srovnání cen ubytování v okolí. Odkazy jsou provizní —
+     pro tebe se cena nemění.</p>
+
+  <!-- TODO Stay22: sem patří embed kód z tvého Stay22 účtu.
+       V dashboardu Stay22 → Mapped → Get embed code. Vloží se <iframe>,
+       jehož URL obsahuje tvoje aid. Skript níž do té URL doplní město
+       a termíny z parametrů, takže jedna stránka obslouží všechny destinace.
+
+       Až to budeš mít, nastav STAY22_AID a případně uprav STAY22_BASE. -->
+  <div id="stay22"></div>
+
+  <h2>Co dál</h2>
+  <p id="more"></p>
+
+  <footer>
+    <a href="/">Nestůj, cestuj!</a> — hledám levné letenky automaticky.
+    Odkazy na letenky a ubytování jsou provizní.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Nastavení ----------------------------------------------------------
+  var STAY22_AID  = "";                                  // TODO: tvoje Stay22 aid
+  var STAY22_BASE = "https://www.stay22.com/embed/gm";    // ověř v dashboardu
+  var SITE        = window.location.origin;
+
+  // ---- Parametry z URL ----------------------------------------------------
+  var q = new URLSearchParams(window.location.search);
+  function param(name, fallback) {
+    var value = (q.get(name) || "").trim();
+    return value || (fallback || "");
+  }
+
+  var place   = param("misto", param("iata", "Nová destinace"));
+  var iata    = param("iata");
+  var country = param("zeme");
+  var origin  = param("odlet", "PRG");
+  var from    = param("od");
+  var to      = param("do");
+  var price   = param("cena");
+
+  // ---- Formátování --------------------------------------------------------
+  function czechDate(iso) {
+    if (!iso) return "";
+    var parts = iso.split("-");
+    if (parts.length !== 3) return iso;
+    return Number(parts[2]) + ". " + Number(parts[1]) + ". " + parts[0];
+  }
+
+  function money(value) {
+    var number = Number(value);
+    if (!value || isNaN(number)) return "—";
+    return number.toLocaleString("cs-CZ") + " Kč";
+  }
+
+  // ---- Obsah --------------------------------------------------------------
+  var heading = country ? place + ", " + country : place;
+  document.title = "Letenka do " + place + " za " + money(price)
+                 + " — Nestůj, cestuj!";
+  document.getElementById("title").textContent = heading;
+  document.getElementById("subtitle").textContent =
+    "Automaticky nalezená nabídka" + (country ? " do " + country : "") + ".";
+  document.getElementById("price").textContent = money(price);
+  document.getElementById("route").textContent =
+    origin + (iata ? " → " + iata : "");
+  document.getElementById("dates").textContent =
+    from ? czechDate(from) + (to ? " – " + czechDate(to) : " (jednosměrný)") : "—";
+  document.getElementById("stay-heading").textContent = "Kde spát v " + place;
+
+  // Odkaz na letenku: robot ho může předat v ?letenka=, jinak fallback
+  // na vyhledávání Aviasales.
+  var flightUrl = param("letenka");
+  if (!flightUrl && iata && from) {
+    var d = from.split("-");
+    var code = origin + d[2] + d[1] + iata;
+    if (to) { var r = to.split("-"); code += r[2] + r[1]; }
+    flightUrl = "https://www.aviasales.com/search/" + code + "1";
+  }
+  var flightLink = document.getElementById("flight-link");
+  if (flightUrl) {
+    flightLink.href = flightUrl;
+  } else {
+    flightLink.style.display = "none";
+  }
+
+  // ---- Stay22 mapa --------------------------------------------------------
+  var box = document.getElementById("stay22");
+  if (STAY22_AID) {
+    var url = new URL(STAY22_BASE);
+    url.searchParams.set("aid", STAY22_AID);
+    url.searchParams.set("address", country ? place + ", " + country : place);
+    if (from) url.searchParams.set("checkin", from);
+    if (to)   url.searchParams.set("checkout", to);
+    url.searchParams.set("maincolor", "0b7285");
+
+    var frame = document.createElement("iframe");
+    frame.src = url.toString();
+    frame.loading = "lazy";
+    frame.title = "Ubytování v " + place;
+    box.appendChild(frame);
+  } else {
+    box.innerHTML =
+      '<p style="padding:20px;color:#6b6b70">Mapa ubytování se tu zobrazí, '
+      + 'až vložíš Stay22 embed kód (konstanta STAY22_AID v tomto souboru).</p>';
+  }
+
+  // ---- Odkaz na stránku destinace, až bude existovat ----------------------
+  var more = document.getElementById("more");
+  more.innerHTML =
+    'Píšu průvodce po jednotlivých zemích — koukni do sekce '
+    + '<a href="' + SITE + '/destinace/">Destinace</a>, jestli už tam '
+    + (country || place) + ' je. Pokud ne, přidám to.';
+})();
+</script>
+</body>
+</html>

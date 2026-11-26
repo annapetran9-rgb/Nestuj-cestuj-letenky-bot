@@ -1,0 +1,48 @@
+# Sběr cen. Tohle je milník 3 — běží od začátku a první měsíc nic neposílá,
+# jen plní cenovou historii.
+#
+# Potřebné secrets (Settings → Secrets and variables → Actions):
+#   DATABASE_URL           connection string z Neonu nebo Supabase
+#   TRAVELPAYOUTS_TOKEN    nepovinné, bez něj jede jen Ryanair
+#   TRAVELPAYOUTS_MARKER   nepovinné, bez něj nejsou provize v odkazech
+#
+# Poznámka k času: cron v GitHub Actions jede v UTC a ve špičce se běh klidně
+# o 10–15 minut zpozdí. Minuta 17 je schválně, ne :00 — v nulté minutě běží
+# půlka internetu a zpoždění je největší.
+
+name: Sběr cen letenek
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalace Postgres driveru
+        run: pip install --quiet "psycopg[binary]>=3.1"
+
+      - name: Sběr
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+          TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
+        run: python3 pipeline.py collect --origins PRG,BRQ,OSR,VIE,KRK,BER,BTS
+
+      - name: Kolik už máme nasbírané
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python3 pipeline.py stats

@@ -1,0 +1,52 @@
+# Vyhodnocení a odesílání alertů. Milník 4 a 5.
+#
+# ZÁMĚRNĚ BEZ AUTOMATICKÉHO ROZVRHU. Zapni `schedule` níž teprve až
+# `pipeline.py stats` ukáže aspoň 30 pozorování na trasách, které tě zajímají
+# (běžně po 2–4 týdnech sběru). Do té doby pouštěj ručně přes "Run workflow"
+# a kontroluj, co by to poslalo.
+
+name: Alerty na levné letenky
+
+on:
+  workflow_dispatch:
+    inputs:
+      notify:
+        description: "Skutečně poslat do Telegramu (jinak jen vypíše)"
+        type: boolean
+        default: false
+  # Odkomentuj, až budeš mít historii a odladěné prahy:
+  # schedule:
+  #   - cron: "23 5-21 * * *"
+
+concurrency:
+  group: alerts
+  cancel-in-progress: false
+
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalace Postgres driveru
+        run: pip install --quiet "psycopg[binary]>=3.1"
+
+      - name: Vyhodnocení
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SITE_BASE_URL: https://nestuj-cestuj.cz
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || \
+             [ "${{ inputs.notify }}" = "true" ]; then
+            python3 pipeline.py analyze --notify
+          else
+            python3 pipeline.py analyze
+          fi
